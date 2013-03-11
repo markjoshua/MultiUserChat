@@ -29,6 +29,8 @@ and your pseudonym(alias) for that server. The server can also optionally be all
 
 
 ###TO DO:
-Persistent list of servers for client once they have been entered by client (e.g. server list exists after program shutdown)
-Configuration file and options for client (e.g. font, text color, window background, themes)
-Send images and files
+>Persistent list of servers for client once they have been entered by client (e.g. server list exists after program shutdown)
+
+>Configuration file and options for client (e.g. font, text color, window background, themes)
+
+>Send images and files
