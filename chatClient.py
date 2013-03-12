@@ -228,6 +228,9 @@ def setupHost(host_port):
         host.close()
         return -1
     
+def exit_prof(root):
+    root.quit()
+    root.destroy()
 
 def main():
     global root
@@ -250,7 +253,7 @@ def main():
     #buttons to either create a server or select one
     nwsrv_but = ttk.Button(frame, text="New Server", command=lambda: newServer(servers, lbox))
     selsrv_but = ttk.Button(frame, text="Select", command=lambda: selectServer(servers, lbox))
-    exit_but = ttk.Button(frame, text="Exit", command=lambda: root.destroy())
+    exit_but = ttk.Button(frame, text="Exit", command=lambda: exit_prog(root))
 
     #set up grid for GUI elements
     frame.grid(column=0, row=0, sticky=(N,W,E,S))
