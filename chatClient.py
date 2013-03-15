@@ -228,7 +228,7 @@ def setupHost(host_port):
         host.close()
         return -1
     
-def exit_prof(root):
+def exit_prog(root):
     root.quit()
     root.destroy()
 
@@ -237,6 +237,7 @@ def main():
     
     root = Tk()
     root.title("Server Select")
+    root.protocol("WN_DELETE_WINDOW", lambda: exit_prog(root))
     frame = ttk.Frame(root, padding=(12,12,0,12))
     ttk.Style().configure("TFrame", background="black")
 
