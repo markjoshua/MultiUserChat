@@ -6,6 +6,26 @@ import threading
 import select
 import sys
 
+#reliably read a line at a time from a socket, delineated by \n
+def recv_line(s):
+    buffer = ""
+    try:
+        ch = s.recv(1)
+    except:
+        return buffer
+    try:
+        while ch != "\n" and ch != "":
+            buffer += ch
+            ch = s.recv(1)
+    except:
+        return ""
+    
+    if ch == "":
+        buffer = ""
+    else:
+        buffer += "\n"
+    return buffer  
+
 #Holds information important for connecting to servers
 class Server:
     def __init__(self, addr="", port=6666, my_alias="Anon", serv_alias=None):
@@ -37,6 +57,7 @@ class workerThread(threading.Thread):
             for (fd,event) in readylist:
                 if fd == self.sock.fileno():
                     line = recv_line(self.sock)
+                    print "From server: "+line
                     if line == "":
                         running = False
                     else:
@@ -46,27 +67,103 @@ class workerThread(threading.Thread):
         if self.window:
             self.window.destroy()
 
+class PreferenceWindow:
+    def __init__(self, parent):
+        self.w = Toplevel(parent.parent)
+        self.w.title("Preferences")
+        
+        self.frame = ttk.Frame(self.w)
 
-#reliably read a line at a time from a socket, delineated by \n
-def recv_line(s):
-    buffer = ""
-    try:
-        ch = s.recv(1)
-    except:
-        return buffer
-    try:
-        while ch != "\n" and ch != "":
-            buffer += ch
-            ch = s.recv(1)
-    except:
-        return ""
-    
-    if ch == "":
-        buffer = ""
-    else:
-        buffer += "\n"
-    return buffer  
-            
+        self.save_var = IntVar()
+        self.save_srvs = Checkbutton(self.frame, text="Save Servers", variable=save_var, command=self.saveServers)
+        self.close_but = ttk.Button(self.frame, text="Close", command=self.close)
+
+        self.frame.grid(column=0,row=0, sticky=(N,W,E,S))
+        self.save_srvs.grid(column=0,row=0, sticky=(N,W,E,S))
+        self.close_but.grid(column=1,row=1, sticky=(N,W,E,S))
+
+        self.w.columnconfigure("all", weight=1)
+        self.w.rowconfigure("all", weight=1)
+        self.frame.columnconfigure("all", weight=1)
+        self.frame.rowconfigure("all", weight=1)
+
+    def saveServers(self):
+        if(self.save_var.get()):
+            parent.preferences["saveservers"] = "true"
+            f = open("servers", "w")
+            for i in parent.servers:
+                line = i.addr + " " + str(i.port) + " " + i.my_alias + i.serv_alias
+                f.write(line)
+            f.close()
+        else:
+            parent.preferences["saveservers"] = "false"        
+
+    def close(self):
+        f = open("prefs", "w")
+        for key in parent.preferences:
+            line = key + " " + parent.preferences[key]+"\n"
+            f.write(line)
+        f.close()
+        self.w.quit()
+        self.w.destroy()
+        
+
+
+class Client:
+    def __init__(self, parent, host, serv_alias, my_alias):
+        self.w = Toplevel(parent.parent)
+        self.w.title(serv_alias)
+        self.w.protocol("WM_DELETE_WINDOW", self.logoff)
+
+        self.host = host
+        
+        self.frame = ttk.Frame(self.w, padding=(0,0,4,4))
+
+        #text boxes for received messages and message to be sent
+        self.text_box = Text(self.frame, height=18, width=50, wrap="word")
+        self.entry_box = Text(self.frame, height=4, width=50, wrap="word")
+
+        #button to send message
+        self.enter_but = ttk.Button(self.frame, text="Enter", command=self.submit)
+        self.exit_but = ttk.Button(self.frame, text="Exit", command=self.logoff)
+        self.w.bind("<Return>", lambda event: self.submit())
+        
+        #configure grid for text boxes and button
+        self.frame.grid(column=0,row=0, sticky=(N,W,E,S))
+        self.text_box.grid(column=0,row=0,padx=4,pady=4, sticky=(N,W,E,S))
+        self.entry_box.grid(column=0,row=1,padx=4, sticky=(N,W,E,S))
+        self.enter_but.grid(column=1,row=1, sticky=(E))
+        self.exit_but.grid(column=1,row=2, sticky=(E))
+
+        self.w.columnconfigure("all", weight=1)
+        self.w.rowconfigure("all",weight=1)
+        self.frame.columnconfigure("all", weight=1)
+        self.frame.rowconfigure("all",weight=1)
+
+        #spawn thread to read input from server to screen
+        #Then initialize log on protocol with server by sending
+        # CRLF followed by your alias
+        self.wt = workerThread(self.host, self.w, self.text_box)
+        self.wt.start()
+        self.host.sendall("\r\n")
+        self.host.sendall(my_alias+"\n")
+
+    #wrapper for submitting all contents of a text box
+    #and then clearing the box
+    def submit(self):
+        msg = self.entry_box.get(1.0, "end")
+        self.entry_box.delete(1.0, "end")
+        print "From client "+msg
+        self.host.sendall(msg)
+
+    #wrapper for peacefully logging off server
+    def logoff(self):
+        try:
+            self.host.shutdown(socket.SHUT_RDWR)
+            self.host.close()
+        except:
+            self.host.close()
+        self.w.destroy()
 
 class chatClient:
     def __init__(self, parent):
@@ -82,6 +179,10 @@ class chatClient:
 
         #open client window and socket pairs
         self.windows = []
+
+        #preferences
+        self.preferences = {}
+        self.loadPreferences()
 
         #set up the menu
         self.menu = self.setUpMenu()
@@ -112,21 +213,40 @@ class chatClient:
         self.frame.rowconfigure("all", weight=1)
 
 
+    def loadPreferences(self):
+        try:
+            f = open("prefs", "r")
+            pref_lines = f.readlines()
+            for i in pref_lines:
+                option = i.split()[0]
+                value = i.split()[0]
+                value = value[:len(value)-1]
+                self.preferences[option] = value
+            f.close()
+        except:
+            print "No preference file found"
+
     def setUpMenu(self):
         menubar = Menu(self.parent)
         #menubar.configure()
         menu_file = Menu(menubar)
         #menu_file.configure()
-        menu_pref = Menu(menubar)
+        menu_edit = Menu(menubar)
         #menu_edit.configure()
         self.parent["menu"] = menubar
         menubar.add_cascade(menu=menu_file, label="File")
-        menubar.add_cascade(menu=menu_pref, label="Preferences")
+        menubar.add_cascade(menu=menu_edit, label="Edit")
 
         menu_file.add_command(label="Exit", command=self.exit_prog)
 
+        menu_edit.add_command(label="Preferences", command=self.preferences)
+
         return menubar
 
+
+    def preferences(self):
+        p = PreferenceWindow(self)
+        
 
     def newServer(self):
         #create new window for server info input
@@ -268,61 +388,13 @@ class chatClient:
     #text box, input is displayed on a separate text box handled by
     #a separate thread.
     def doClient(self, host, serv_alias, my_alias):
-        w = Toplevel(self.parent)
-        w.title(serv_alias)
-        w.protocol("WM_DELETE_WINDOW", lambda: self.logoff(w, host))
-        self.windows.append((w, host))
-        frame = ttk.Frame(w, padding=(0,0,4,4))
-
-        #text boxes for received messages and message to be sent
-        text_box = Text(frame, height=18, width=50, wrap="word")
-        entry_box = Text(frame, height=4, width=50, wrap="word")
-
-        #button to send message
-        enter_but = ttk.Button(frame, text="Enter", command=lambda: self.submit(entry_box,host))
-        exit_but = ttk.Button(frame, text="Exit", command=lambda: self.logoff(w, host))
-        w.bind("<Return>", lambda event: self.submit(entry_box, host))
-
-        #configure grid for text boxes and button
-        frame.grid(column=0,row=0, sticky=(N,W,E,S))
-        text_box.grid(column=0,row=0,padx=4,pady=4, sticky=(N,W,E,S))
-        entry_box.grid(column=0,row=1,padx=4, sticky=(N,W,E,S))
-        enter_but.grid(column=1,row=1, sticky=(E))
-        exit_but.grid(column=1,row=2, sticky=(E))
-
-        w.columnconfigure(0, weight=1)
-        w.rowconfigure(0,weight=1)
-        frame.columnconfigure("all", weight=1)
-        frame.rowconfigure("all",weight=1)
-
-        #spawn thread to read input from server to screen
-        #Then initialize log on protocol with server by sending
-        # CRLF followed by your alias
-        wt = workerThread(host, w, text_box)
-        wt.start()
-        host.sendall("\r\n")
-        host.sendall(my_alias+"\n")
-
-    #wrapper for submitting all contents of a text box
-    #and then clearing the box
-    def submit(self, entry_box, sock):
-        msg = entry_box.get(1.0, "end")
-        entry_box.delete(1.0, "end")
-        sock.sendall(msg)
-
-    #wrapper for peacefully logging off server
-    def logoff(self, w, host):
-        try:
-            host.shutdown(socket.SHUT_RDWR)
-            host.close()
-        except:
-            host.close()
-        w.destroy()
+        c = Client(self, host, serv_alias, my_alias)
+        self.windows.append(c)
 
     #wrapper for peacefully exiting the program
     def exit_prog(self):
         for i in self.windows:
-            self.logoff(i[0], i[1])
+            i.logoff()
         self.parent.quit()
         self.parent.destroy()
 
