@@ -80,6 +80,12 @@ class chatClient:
         #dictionary that holds Server objects by alias
         self.servers = {}
 
+        #open client window and socket pairs
+        self.windows = []
+
+        #set up the menu
+        self.menu = self.setUpMenu()
+
         #GUI display of self.servers in the form of a listbox
         self.lbox = Listbox(self.frame, listvariable=self.servers.keys())
         self.scroll = ttk.Scrollbar(self.frame, orient="vertical", command=self.lbox.yview)
@@ -104,6 +110,22 @@ class chatClient:
         self.parent.rowconfigure("all", weight=1)
         self.frame.columnconfigure("all", weight=1)
         self.frame.rowconfigure("all", weight=1)
+
+
+    def setUpMenu(self):
+        menubar = Menu(self.parent)
+        #menubar.configure()
+        menu_file = Menu(menubar)
+        #menu_file.configure()
+        menu_pref = Menu(menubar)
+        #menu_edit.configure()
+        self.parent["menu"] = menubar
+        menubar.add_cascade(menu=menu_file, label="File")
+        menubar.add_cascade(menu=menu_pref, label="Preferences")
+
+        menu_file.add_command(label="Exit", command=self.exit_prog)
+
+        return menubar
 
 
     def newServer(self):
@@ -249,6 +271,7 @@ class chatClient:
         w = Toplevel(self.parent)
         w.title(serv_alias)
         w.protocol("WM_DELETE_WINDOW", lambda: self.logoff(w, host))
+        self.windows.append((w, host))
         frame = ttk.Frame(w, padding=(0,0,4,4))
 
         #text boxes for received messages and message to be sent
@@ -298,6 +321,8 @@ class chatClient:
 
     #wrapper for peacefully exiting the program
     def exit_prog(self):
+        for i in self.windows:
+            self.logoff(i[0], i[1])
         self.parent.quit()
         self.parent.destroy()
 
