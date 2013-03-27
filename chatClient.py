@@ -26,6 +26,8 @@ def recv_line(s):
         buffer += "\n"
     return buffer  
 
+
+
 #Holds information important for connecting to servers
 class Server:
     def __init__(self, addr="", port=6666, my_alias="Anon", serv_alias=None):
@@ -37,6 +39,8 @@ class Server:
         else:
             self.serv_alias = serv_alias
 
+
+
 #Worker thread that reads input from a socket and displays it in a text box
 class workerThread(threading.Thread):
     def __init__(self, sock, window, text_box):
@@ -44,6 +48,7 @@ class workerThread(threading.Thread):
         self.sock = sock
         self.window = window
         self.text_box = text_box
+
 
     def run(self):
         self.text_box.config(state="disabled")
@@ -55,60 +60,76 @@ class workerThread(threading.Thread):
         while running:
             readylist = pollObject.poll()
             for (fd,event) in readylist:
-                if fd == self.sock.fileno():
-                    line = recv_line(self.sock)
-                    print "From server: "+line
-                    if line == "":
-                        running = False
-                    else:
-                        self.text_box.config(state="normal")
-                        self.text_box.insert("end", line)
-                        self.text_box.config(state="disabled")
+                try:
+                    if fd == self.sock.fileno():
+                        line = recv_line(self.sock)
+                        if line == "":
+                            running = False
+                        else:
+                            self.text_box.config(state="normal")
+                            self.text_box.insert("end", line)
+                            self.text_box.config(state="disabled")
+                except:
+                    running = False
         if self.window:
             self.window.destroy()
 
+
+
+#Class to manage the GUI aspect of preferences
 class PreferenceWindow:
     def __init__(self, parent):
-        self.w = Toplevel(parent.parent)
+        self.parent = parent
+        self.w = Toplevel(self.parent.parent)
         self.w.title("Preferences")
         
-        self.frame = ttk.Frame(self.w)
+        self.frame = ttk.Frame(self.w, padding=(12,12,12,12))
 
         self.save_var = IntVar()
-        self.save_srvs = Checkbutton(self.frame, text="Save Servers", variable=save_var, command=self.saveServers)
+        self.save_srvs = Checkbutton(self.frame, text="Save Servers", variable=self.save_var, command=self.saveServers)
+        if self.parent.preferences["saveservers"] == "true":
+            self.save_srvs.select()
         self.close_but = ttk.Button(self.frame, text="Close", command=self.close)
 
         self.frame.grid(column=0,row=0, sticky=(N,W,E,S))
-        self.save_srvs.grid(column=0,row=0, sticky=(N,W,E,S))
-        self.close_but.grid(column=1,row=1, sticky=(N,W,E,S))
+        self.save_srvs.grid(column=0,row=0, padx=4, pady=4, sticky=(N,W,E,S))
+        self.close_but.grid(column=0,row=1, padx=4, pady=4, sticky=(N,W,E,S))
 
         self.w.columnconfigure("all", weight=1)
         self.w.rowconfigure("all", weight=1)
         self.frame.columnconfigure("all", weight=1)
         self.frame.rowconfigure("all", weight=1)
 
+
+    	#Handles the save server preference. The code to write server list
+		#out to disk is also called in chatClient if the preference is set
+		#to true.
     def saveServers(self):
         if(self.save_var.get()):
-            parent.preferences["saveservers"] = "true"
+            self.parent.preferences["saveservers"] = "true"
             f = open("servers", "w")
-            for i in parent.servers:
-                line = i.addr + " " + str(i.port) + " " + i.my_alias + i.serv_alias
+            serv_map = self.parent.servers
+            for i in serv_map:
+                line = serv_map[i].addr+" "+str(serv_map[i].port)+" "+serv_map[i].my_alias+" "+serv_map[i].serv_alias
                 f.write(line)
             f.close()
         else:
-            parent.preferences["saveservers"] = "false"        
+            self.parent.preferences["saveservers"] = "false"        
 
+
+		#Upon closing the preference window, the pref file is updated
     def close(self):
         f = open("prefs", "w")
-        for key in parent.preferences:
-            line = key + " " + parent.preferences[key]+"\n"
+        for key in self.parent.preferences:
+            line = key + " " + self.parent.preferences[key]+"\n"
             f.write(line)
         f.close()
-        self.w.quit()
         self.w.destroy()
         
 
 
+#handles receiving and sending aspects as well as the GUI for
+#chat window
 class Client:
     def __init__(self, parent, host, serv_alias, my_alias):
         self.w = Toplevel(parent.parent)
@@ -126,7 +147,7 @@ class Client:
         #button to send message
         self.enter_but = ttk.Button(self.frame, text="Enter", command=self.submit)
         self.exit_but = ttk.Button(self.frame, text="Exit", command=self.logoff)
-        self.w.bind("<Return>", lambda event: self.submit())
+        self.entry_box.bind("<Return>", lambda event: self.submit())
         
         #configure grid for text boxes and button
         self.frame.grid(column=0,row=0, sticky=(N,W,E,S))
@@ -148,13 +169,14 @@ class Client:
         self.host.sendall("\r\n")
         self.host.sendall(my_alias+"\n")
 
+
     #wrapper for submitting all contents of a text box
     #and then clearing the box
     def submit(self):
         msg = self.entry_box.get(1.0, "end")
         self.entry_box.delete(1.0, "end")
-        print "From client "+msg
         self.host.sendall(msg)
+
 
     #wrapper for peacefully logging off server
     def logoff(self):
@@ -164,6 +186,8 @@ class Client:
         except:
             self.host.close()
         self.w.destroy()
+
+
 
 class chatClient:
     def __init__(self, parent):
@@ -180,10 +204,6 @@ class chatClient:
         #open client window and socket pairs
         self.windows = []
 
-        #preferences
-        self.preferences = {}
-        self.loadPreferences()
-
         #set up the menu
         self.menu = self.setUpMenu()
 
@@ -192,6 +212,11 @@ class chatClient:
         self.scroll = ttk.Scrollbar(self.frame, orient="vertical", command=self.lbox.yview)
         self.lbox["yscrollcommand"] = self.scroll.set
 
+        #preferences
+        self.preferences = {}
+        self.loadPreferences()
+        self.handlePreferences()
+
         #create buttons
         self.nwsrv_but = ttk.Button(self.frame, text="New Server", command=self.newServer)
         self.remsrv_but = ttk.Button(self.frame, text="Remove Server", command=self.removeServer)
@@ -199,13 +224,13 @@ class chatClient:
         self.exit_but = ttk.Button(self.frame, text="Exit", command=self.exit_prog)
 
         #set up grid for GUI elements
-        self.frame.grid(column=0, row=0, columnspan=2, rowspan=10, sticky=(N,W,E,S))
-        self.lbox.grid(column=0, row=0, rowspan=10, sticky=(N,W,E,S))
-        self.scroll.grid(column=1, row=0, rowspan=10, sticky=(N,W,E,S))
+        self.frame.grid(column=0, row=0, columnspan=2, rowspan=15, sticky=(N,W,E,S))
+        self.lbox.grid(column=0, row=0, rowspan=15, sticky=(N,W,E,S))
+        self.scroll.grid(column=1, row=0, rowspan=15, sticky=(N,W,E,S))
         self.nwsrv_but.grid(column=2, row=0, padx=4, sticky=(N,W,E,S))
         self.remsrv_but.grid(column=2, row=1, padx=4, sticky=(N,W,E,S))
-        self.selsrv_but.grid(column=2, row=3, padx=4, sticky=(N,W,E,S))
-        self.exit_but.grid(column=2, row=6, padx=4, sticky=(N,W,E,S))
+        self.selsrv_but.grid(column=2, row=7, padx=4, sticky=(N,W,E,S))
+        self.exit_but.grid(column=2, row=13, padx=4, sticky=(N,W,E,S))
 
         self.parent.columnconfigure("all", weight=1)
         self.parent.rowconfigure("all", weight=1)
@@ -213,19 +238,42 @@ class chatClient:
         self.frame.rowconfigure("all", weight=1)
 
 
+		#if you have saved preferences this will load them.
     def loadPreferences(self):
         try:
             f = open("prefs", "r")
             pref_lines = f.readlines()
             for i in pref_lines:
                 option = i.split()[0]
-                value = i.split()[0]
-                value = value[:len(value)-1]
+                value = i.split()[1]
                 self.preferences[option] = value
             f.close()
         except:
             print "No preference file found"
 
+
+		#handles any loaded preferences
+    def handlePreferences(self):
+        if "saveservers" in self.preferences:
+            if self.preferences["saveservers"] == "true":
+                f = open("servers", "r")
+                serv_list = f.readlines()
+                for i in serv_list:
+                    serv_info = i.split()
+                    self.addServer(0, serv_info[0], serv_info[1], serv_info[2], serv_info[3])
+
+
+		#helper function to write server list out to disk
+    def writeServers(self):
+        f = open("servers", "w")
+        serv_map = self.servers
+        for i in serv_map:
+            line = serv_map[i].addr+" "+str(serv_map[i].port)+" "+serv_map[i].my_alias+" "+serv_map[i].serv_alias
+            f.write(line)
+        f.close()           
+
+
+		#set up menu bar for chatClient
     def setUpMenu(self):
         menubar = Menu(self.parent)
         #menubar.configure()
@@ -239,12 +287,14 @@ class chatClient:
 
         menu_file.add_command(label="Exit", command=self.exit_prog)
 
-        menu_edit.add_command(label="Preferences", command=self.preferences)
+        menu_edit.add_command(label="Preferences", command=self.openPreferences)
 
         return menubar
 
 
-    def preferences(self):
+		#creates a PreferenceWindow class that handles
+		#GUI and preference selection
+    def openPreferences(self):
         p = PreferenceWindow(self)
         
 
@@ -311,7 +361,11 @@ class chatClient:
                         new_serv = Server(addr, int(port), my_alias, serv_alias)
                         self.servers[serv_alias] = new_serv
                         self.lbox.insert("end", serv_alias)
-                        window.destroy()
+                        if "saveservers" in self.preferences:
+                            if self.preferences["saveservers"] == "true":
+                                self.writeServers()
+                        if window:
+                            window.destroy()
                     except:
                         tkMessageBox.showinfo(title="Error", message="One or more of the entered fields is incorrect")
             else:
@@ -322,7 +376,11 @@ class chatClient:
                         new_serv = Server(addr, int(port), my_alias)
                         self.servers[addr] = new_serv
                         self.lbox.insert("end", addr)
-                        window.destroy()
+                        if "saveservers" in self.preferences:
+                            if self.preferences["saveservers"] == "true":
+                                self.writeServers()
+                        if window:
+                            window.destroy()
                     except:
                         tkMessageBox.showinfo(title="Error", message="One or more of the entered fields is incorrect")
 
@@ -338,6 +396,7 @@ class chatClient:
         self.servers.pop(serv_alias)
         self.lbox.delete(index)
         
+
     #sets up a socket on the host side between 5000 and 6000.
     #Then attempt to connect to selected server. On success,
     #doClient handles the rest of the work.
@@ -384,12 +443,14 @@ class chatClient:
             host.close()
             return -1
 
+
     #Create a new window for chatting. Messages are entered into a
     #text box, input is displayed on a separate text box handled by
     #a separate thread.
     def doClient(self, host, serv_alias, my_alias):
         c = Client(self, host, serv_alias, my_alias)
         self.windows.append(c)
+
 
     #wrapper for peacefully exiting the program
     def exit_prog(self):
