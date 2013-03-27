@@ -31,10 +31,6 @@ and your pseudonym(alias) for that server. The server can also optionally be all
 ###TO DO:
 >Possibly refactor chatServer.py
 
->Fix sending of extra '\n' characters when submitting a message in client by 'enter' button
-
->figure out why the preference window doesn't pop up when you hit preferences as a menu option
-
 >Add more options to preferences. It currently only has a 'save servers' checkbutton
 
 >Send images and files
