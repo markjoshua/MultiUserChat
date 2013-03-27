@@ -101,9 +101,9 @@ class PreferenceWindow:
         self.frame.rowconfigure("all", weight=1)
 
 
-    	#Handles the save server preference. The code to write server list
-		#out to disk is also called in chatClient if the preference is set
-		#to true.
+        #Handles the save server preference. The code to write server list
+        #out to disk is also called in chatClient if the preference is set
+        #to true.
     def saveServers(self):
         if(self.save_var.get()):
             self.parent.preferences["saveservers"] = "true"
@@ -117,7 +117,7 @@ class PreferenceWindow:
             self.parent.preferences["saveservers"] = "false"        
 
 
-		#Upon closing the preference window, the pref file is updated
+        #Upon closing the preference window, the pref file is updated
     def close(self):
         f = open("prefs", "w")
         for key in self.parent.preferences:
@@ -135,6 +135,7 @@ class Client:
         self.w = Toplevel(parent.parent)
         self.w.title(serv_alias)
         self.w.protocol("WM_DELETE_WINDOW", self.logoff)
+        self.w.bind("<Return>", lambda event: self.submit(event))
 
         self.host = host
         
@@ -145,9 +146,8 @@ class Client:
         self.entry_box = Text(self.frame, height=4, width=50, wrap="word")
 
         #button to send message
-        self.enter_but = ttk.Button(self.frame, text="Enter", command=self.submit)
+        self.enter_but = ttk.Button(self.frame, text="Enter", command=lambda: self.submit(0))
         self.exit_but = ttk.Button(self.frame, text="Exit", command=self.logoff)
-        self.entry_box.bind("<Return>", lambda event: self.submit())
         
         #configure grid for text boxes and button
         self.frame.grid(column=0,row=0, sticky=(N,W,E,S))
@@ -172,8 +172,10 @@ class Client:
 
     #wrapper for submitting all contents of a text box
     #and then clearing the box
-    def submit(self):
+    def submit(self, event):
         msg = self.entry_box.get(1.0, "end")
+        if event:
+            msg = msg[:len(msg)-1]
         self.entry_box.delete(1.0, "end")
         self.host.sendall(msg)
 
@@ -238,7 +240,7 @@ class chatClient:
         self.frame.rowconfigure("all", weight=1)
 
 
-		#if you have saved preferences this will load them.
+        #if you have saved preferences this will load them.
     def loadPreferences(self):
         try:
             f = open("prefs", "r")
@@ -252,7 +254,7 @@ class chatClient:
             print "No preference file found"
 
 
-		#handles any loaded preferences
+        #handles any loaded preferences
     def handlePreferences(self):
         if "saveservers" in self.preferences:
             if self.preferences["saveservers"] == "true":
@@ -263,7 +265,7 @@ class chatClient:
                     self.addServer(0, serv_info[0], serv_info[1], serv_info[2], serv_info[3])
 
 
-		#helper function to write server list out to disk
+        #helper function to write server list out to disk
     def writeServers(self):
         f = open("servers", "w")
         serv_map = self.servers
@@ -273,7 +275,7 @@ class chatClient:
         f.close()           
 
 
-		#set up menu bar for chatClient
+        #set up menu bar for chatClient
     def setUpMenu(self):
         menubar = Menu(self.parent)
         #menubar.configure()
@@ -292,8 +294,8 @@ class chatClient:
         return menubar
 
 
-		#creates a PreferenceWindow class that handles
-		#GUI and preference selection
+        #creates a PreferenceWindow class that handles
+        #GUI and preference selection
     def openPreferences(self):
         p = PreferenceWindow(self)
         
